@@ -6,7 +6,6 @@ void main() {
     await tester.pumpWidget(const SumnVaultApp());
 
     expect(find.text('Your private digital vaults'), findsOneWidget);
-    expect(find.text('Personal.svault'), findsOneWidget);
-    expect(find.text('Documents.svault'), findsOneWidget);
+    expect(find.text('No vaults yet. Create or open a .svault file.'), findsOneWidget);
   });
 }

@@ -2,7 +2,8 @@
 param(
   [ValidateSet('all', 'windows', 'linux', 'macos', 'android')]
   [string]$Target = 'all',
-  [string]$Output = 'dist'
+  [string]$Output = 'dist',
+  [switch]$SkipAndroidBundle
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,10 +53,12 @@ foreach ($platform in $targets) {
     'android' {
       Invoke-Flutter @('build', 'apk', '--release')
       Copy-Item (Join-Path $root 'build\app\outputs\flutter-apk\app-release.apk') (Join-Path $out 'sumnvault-android-universal.apk') -Force
-      Invoke-Flutter @('build', 'appbundle', '--release')
-      $aab = Join-Path $root 'build\app\outputs\bundle\release\app-release.aab'
-      if (-not (Test-Path $aab)) { throw 'Android App Bundle was not produced.' }
-      Copy-Item $aab (Join-Path $out 'sumnvault-android-release.aab') -Force
+      if (-not $SkipAndroidBundle) {
+        Invoke-Flutter @('build', 'appbundle', '--release')
+        $aab = Join-Path $root 'build\app\outputs\bundle\release\app-release.aab'
+        if (-not (Test-Path $aab)) { throw 'Android App Bundle was not produced.' }
+        Copy-Item $aab (Join-Path $out 'sumnvault-android-release.aab') -Force
+      }
     }
   }
 }

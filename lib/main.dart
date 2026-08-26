@@ -6,33 +6,80 @@ import 'package:file_picker/file_picker.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sumnvault/core/vault/vault_engine.dart';
 import 'package:sumnvault/core/vault/vault_format.dart';
 import 'package:sumnvault/services/android_storage.dart';
 
 void main() => runApp(const SumnVaultApp());
 
-class SumnVaultApp extends StatelessWidget {
+class SumnVaultApp extends StatefulWidget {
   const SumnVaultApp({super.key});
 
   @override
+  State<SumnVaultApp> createState() => _SumnVaultAppState();
+}
+
+class _SumnVaultAppState extends State<SumnVaultApp> {
+  final settings = AppSettings();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final preferences = await SharedPreferences.getInstance();
+    settings.darkMode = preferences.getBool('dark_mode') ?? settings.darkMode;
+    settings.compactView = preferences.getBool('compact_view') ?? settings.compactView;
+    settings.showSizes = preferences.getBool('show_sizes') ?? settings.showSizes;
+    settings.autoLockMinutes = preferences.getInt('auto_lock_minutes') ?? settings.autoLockMinutes;
+    final accentValue = preferences.getInt('accent_color');
+    if (accentValue != null) settings.accent = Color(accentValue);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _saveSettings() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool('dark_mode', settings.darkMode);
+    await preferences.setBool('compact_view', settings.compactView);
+    await preferences.setBool('show_sizes', settings.showSizes);
+    await preferences.setInt('auto_lock_minutes', settings.autoLockMinutes);
+    await preferences.setInt('accent_color', settings.accent.toARGB32());
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final dark = ThemeData.dark();
+    final brightness = settings.darkMode ? Brightness.dark : Brightness.light;
     return MaterialApp(
       title: 'SumnVault',
       debugShowCheckedModeBanner: false,
-      theme: dark.copyWith(
-        scaffoldBackgroundColor: const Color(0xff0b100f),
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff4ed6b4), brightness: Brightness.dark),
+      theme: ThemeData(
+        brightness: brightness,
+        scaffoldBackgroundColor: settings.darkMode ? const Color(0xff0b100f) : const Color(0xfff7faf8),
+        colorScheme: ColorScheme.fromSeed(seedColor: settings.accent, brightness: brightness),
+        useMaterial3: true,
         cardTheme: CardThemeData(elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
       ),
-      home: const VaultHome(),
+      home: VaultHome(settings: settings, onSettingsChanged: _saveSettings),
     );
   }
 }
 
+class AppSettings {
+  bool darkMode = true;
+  bool compactView = false;
+  bool showSizes = true;
+  int autoLockMinutes = 15;
+  Color accent = const Color(0xff4ed6b4);
+}
+
 class VaultHome extends StatefulWidget {
-  const VaultHome({super.key});
+  const VaultHome({super.key, required this.settings, required this.onSettingsChanged});
+  final AppSettings settings;
+  final VoidCallback onSettingsChanged;
   @override
   State<VaultHome> createState() => _VaultHomeState();
 }
@@ -40,11 +87,9 @@ class VaultHome extends StatefulWidget {
 class _VaultHomeState extends State<VaultHome> {
   final engine = VaultEngine();
   final search = TextEditingController();
-  final vaults = <VaultData>[
-    VaultData('Personal.svault', 'Opened today', '24.2 MB', Icons.person_outline, Color(0xff4ed6b4)),
-    VaultData('Documents.svault', 'Opened yesterday', '1.8 GB', Icons.description_outlined, Color(0xff8fb8ff)),
-    VaultData('Projects.svault', 'Opened Aug 20', '640 MB', Icons.work_outline, Color(0xffffbd70)),
-  ];
+  final vaults = <VaultData>[];
+  bool nativeDialogOpen = false;
+  int selectedPage = 0;
 
   @override
   void initState() {
@@ -68,7 +113,9 @@ class _VaultHomeState extends State<VaultHome> {
   Future<void> _createVault() async {
     final details = await _passwordDialog('Create a vault');
     if (details == null || !mounted) return;
+    nativeDialogOpen = true;
     final uri = await FilePicker.saveFile(dialogTitle: 'Choose vault location', fileName: '${details.$1}.svault', bytes: Uint8List(0), type: FileType.custom, allowedExtensions: ['svault']);
+    nativeDialogOpen = false;
     final path = uri == null ? null : await AndroidStorage.prepareDestination(uri.toString());
     if (path == null || !mounted) return;
     final session = await engine.create(File(path), details.$2);
@@ -78,13 +125,16 @@ class _VaultHomeState extends State<VaultHome> {
     }
     setState(() => vaults.insert(0, VaultData('${details.$1}.svault', 'Opened just now', '0 B', Icons.lock_outline, const Color(0xffd891ff), path: path)));
     if (!mounted) return;
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => VaultBrowser(session: session, vaultName: details.$1, externalUri: uri?.toString(), onSaved: () => _message('Vault saved.'))));
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => VaultBrowser(session: session, vaultName: details.$1, externalUri: uri?.toString(), settings: widget.settings, onSaved: () => _message('Vault saved.'))));
   }
 
   Future<void> _openVault() async {
     // file_picker 12 does not expose pickFile yet; select one entry from the list API.
     // ignore: deprecated_member_use
+    nativeDialogOpen = true;
+    // ignore: deprecated_member_use
     final picked = await FilePicker.pickFiles(dialogTitle: 'Open SumnVault', type: FileType.custom, allowedExtensions: ['svault'], allowMultiple: false);
+    nativeDialogOpen = false;
     final selected = picked.isNotEmpty ? picked.first.path : null;
     final path = selected == null ? null : await AndroidStorage.importDocument(selected);
     if (path == null || !mounted) return;
@@ -95,7 +145,7 @@ class _VaultHomeState extends State<VaultHome> {
       final opened = await engine.open(File(path), password.$2);
       await opened.verify();
       if (!mounted) return;
-      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => VaultBrowser(session: opened, vaultName: File(path).uri.pathSegments.last, externalUri: selected, onSaved: () => _message('Vault saved.'))));
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => VaultBrowser(session: opened, vaultName: File(path).uri.pathSegments.last, externalUri: selected, settings: widget.settings, onSaved: () => _message('Vault saved.'))));
     } catch (_) {
       _message('Unable to unlock vault. The password may be incorrect, or the vault may be damaged.');
     }
@@ -118,8 +168,8 @@ class _VaultHomeState extends State<VaultHome> {
         final filtered = vaults.where((vault) => vault.name.toLowerCase().contains(search.text.toLowerCase())).toList();
         return Scaffold(
           appBar: compact ? AppBar(title: const Text('SumnVault', style: TextStyle(fontWeight: FontWeight.w700))) : null,
-          bottomNavigationBar: compact ? NavigationBar(selectedIndex: 0, destinations: const [NavigationDestination(icon: Icon(Icons.grid_view_outlined), label: 'Vaults'), NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Settings')]) : null,
-          body: Row(children: [if (!compact) const VaultSidebar(), Expanded(child: _content(context, compact, filtered))]),
+          bottomNavigationBar: compact ? NavigationBar(selectedIndex: selectedPage, onDestinationSelected: (index) => setState(() => selectedPage = index), destinations: const [NavigationDestination(icon: Icon(Icons.grid_view_outlined), label: 'Vaults'), NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Settings')]) : null,
+          body: Row(children: [if (!compact) VaultSidebar(selected: selectedPage, onSelected: (index) => setState(() => selectedPage = index)), Expanded(child: selectedPage == 0 ? _content(context, compact, filtered) : SettingsPage(settings: widget.settings, onChanged: widget.onSettingsChanged))]),
         );
       });
 
@@ -128,6 +178,7 @@ class _VaultHomeState extends State<VaultHome> {
     return CustomScrollView(slivers: [
       SliverPadding(padding: EdgeInsets.fromLTRB(side, compact ? 24 : 52, side, 28), sliver: SliverToBoxAdapter(child: _intro(context, compact))),
       SliverPadding(padding: EdgeInsets.symmetric(horizontal: side), sliver: SliverToBoxAdapter(child: Row(children: [Text('Recent vaults', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)), const Spacer(), Text('${filtered.length} vaults')]))),
+      if (filtered.isEmpty) SliverPadding(padding: EdgeInsets.fromLTRB(side, 32, side, 48), sliver: const SliverToBoxAdapter(child: Center(child: Text('No vaults yet. Create or open a .svault file.')))) else
       SliverPadding(padding: EdgeInsets.fromLTRB(side, 14, side, 48), sliver: SliverGrid(delegate: SliverChildBuilderDelegate((context, index) {
         final vault = filtered[index];
         return VaultCard(vault: vault, onOpen: vault.path == null ? null : () => _unlockKnownVault(vault));
@@ -153,7 +204,7 @@ class _VaultHomeState extends State<VaultHome> {
       final session = await engine.open(File(path), password.$2);
       await session.verify();
       if (!mounted) return;
-      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => VaultBrowser(session: session, vaultName: vault.name.replaceAll('.svault', ''), onSaved: () => _message('Vault saved.'))));
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => VaultBrowser(session: session, vaultName: vault.name.replaceAll('.svault', ''), settings: widget.settings, onSaved: () => _message('Vault saved.'))));
     } catch (_) {
       _message('Unable to unlock vault. Check the password or vault integrity.');
     }
@@ -171,13 +222,15 @@ class VaultData {
 }
 
 class VaultSidebar extends StatelessWidget {
-  const VaultSidebar({super.key});
+  const VaultSidebar({super.key, required this.selected, required this.onSelected});
+  final int selected;
+  final ValueChanged<int> onSelected;
   @override
     Widget build(BuildContext context) => Container(width: 246, padding: const EdgeInsets.fromLTRB(20, 28, 16, 20), decoration: BoxDecoration(border: Border(right: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: .35)))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [Container(width: 36, height: 36, decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(10)), child: Icon(Icons.shield_outlined, color: Theme.of(context).colorScheme.onPrimary)), const SizedBox(width: 10), const Expanded(child: Text('SumnVault', overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)))]),
         const SizedBox(height: 48),
-        const ListTile(selected: true, leading: Icon(Icons.grid_view_outlined), title: Text('Vaults')),
-        const ListTile(leading: Icon(Icons.settings_outlined), title: Text('Settings')),
+        ListTile(selected: selected == 0, leading: const Icon(Icons.grid_view_outlined), title: const Text('Vaults'), onTap: () => onSelected(0)),
+        ListTile(selected: selected == 1, leading: const Icon(Icons.settings_outlined), title: const Text('Settings'), onTap: () => onSelected(1)),
         const Spacer(),
         Text('SUMNATIC  /  LOCAL-FIRST', style: Theme.of(context).textTheme.labelSmall?.copyWith(letterSpacing: 1.1)),
       ]));
@@ -197,11 +250,40 @@ class VaultCard extends StatelessWidget {
       ]))));
 }
 
+class SettingsPage extends StatelessWidget {
+  const SettingsPage({super.key, required this.settings, required this.onChanged});
+  final AppSettings settings;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+        padding: const EdgeInsets.all(32),
+        children: [
+          Text('Settings', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Text('Customize how SumnVault looks and protects your sessions.', style: Theme.of(context).textTheme.bodyLarge),
+          const SizedBox(height: 28),
+          Card(child: Column(children: [
+            SwitchListTile(title: const Text('Dark appearance'), subtitle: const Text('Use the low-light interface'), value: settings.darkMode, onChanged: (value) { settings.darkMode = value; onChanged(); }),
+            const Divider(height: 1),
+            SwitchListTile(title: const Text('Compact file view'), subtitle: const Text('Fit more items on screen'), value: settings.compactView, onChanged: (value) { settings.compactView = value; onChanged(); }),
+            const Divider(height: 1),
+            SwitchListTile(title: const Text('Show file sizes'), value: settings.showSizes, onChanged: (value) { settings.showSizes = value; onChanged(); }),
+            const Divider(height: 1),
+            ListTile(title: const Text('Auto-lock'), subtitle: Text('${settings.autoLockMinutes} minutes after inactivity'), trailing: DropdownButton<int>(value: settings.autoLockMinutes, items: const [5, 15, 30, 60].map((value) => DropdownMenuItem(value: value, child: Text('$value min'))).toList(), onChanged: (value) { if (value == null) return; settings.autoLockMinutes = value; onChanged(); })),
+            const Divider(height: 1),
+            ListTile(title: const Text('Accent color'), trailing: Wrap(spacing: 8, children: [const Color(0xff4ed6b4), const Color(0xff8fb8ff), const Color(0xffffbd70), const Color(0xffd891ff)].map((color) => InkWell(onTap: () { settings.accent = color; onChanged(); }, borderRadius: BorderRadius.circular(20), child: Container(width: 28, height: 28, decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: Border.all(color: settings.accent == color ? Colors.white : Colors.transparent, width: 3))))).toList())),
+          ])),
+        ],
+      );
+}
+
 class VaultBrowser extends StatefulWidget {
-  const VaultBrowser({super.key, required this.session, required this.vaultName, required this.onSaved, this.externalUri});
+  const VaultBrowser({super.key, required this.session, required this.vaultName, required this.onSaved, required this.settings, this.externalUri});
   final VaultSession session;
   final String vaultName;
   final VoidCallback onSaved;
+  final AppSettings settings;
   final String? externalUri;
 
   @override
@@ -212,6 +294,7 @@ class _VaultBrowserState extends State<VaultBrowser> with WidgetsBindingObserver
   String? folderId;
   bool busy = false;
   Timer? _autoLockTimer;
+  bool nativeDialogOpen = false;
 
   @override
   void initState() {
@@ -229,12 +312,12 @@ class _VaultBrowserState extends State<VaultBrowser> with WidgetsBindingObserver
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) _lockAndLeave();
+    if (!nativeDialogOpen && (state == AppLifecycleState.paused || state == AppLifecycleState.inactive)) _lockAndLeave();
   }
 
   void _armAutoLock() {
     _autoLockTimer?.cancel();
-    _autoLockTimer = Timer(const Duration(minutes: 15), _lockAndLeave);
+    _autoLockTimer = Timer(Duration(minutes: widget.settings.autoLockMinutes), _lockAndLeave);
   }
 
   void _lockAndLeave() {
@@ -253,7 +336,10 @@ class _VaultBrowserState extends State<VaultBrowser> with WidgetsBindingObserver
 
   Future<void> _importFile() async {
     // ignore: deprecated_member_use
+    nativeDialogOpen = true;
+    // ignore: deprecated_member_use
     final picked = await FilePicker.pickFiles(type: FileType.any, allowMultiple: false, withReadStream: true);
+    nativeDialogOpen = false;
     if (picked.isEmpty) return;
     setState(() => busy = true);
     try {
@@ -327,7 +413,9 @@ class _VaultBrowserState extends State<VaultBrowser> with WidgetsBindingObserver
   Future<void> _snapshot() async {
     final name = '${widget.vaultName}.snapshot-${DateTime.now().toIso8601String().replaceAll(':', '-')}.svault';
     final snapshotBytes = Platform.isAndroid ? await widget.session.file.readAsBytes() : Uint8List(0);
+    nativeDialogOpen = true;
     final uri = await FilePicker.saveFile(fileName: name, bytes: snapshotBytes, dialogTitle: 'Save encrypted snapshot');
+    nativeDialogOpen = false;
     if (uri?.scheme == 'file') {
       await widget.session.createSnapshot(File(uri!.toFilePath()));
     }
@@ -335,7 +423,9 @@ class _VaultBrowserState extends State<VaultBrowser> with WidgetsBindingObserver
   }
 
   Future<void> _restoreSnapshot() async {
+    nativeDialogOpen = true;
     final picked = await FilePicker.pickFiles(dialogTitle: 'Choose encrypted snapshot', type: FileType.custom, allowedExtensions: ['svault']);
+    nativeDialogOpen = false;
     if (picked.isEmpty || picked.first.path == null) return;
     final source = picked.first.path!;
     final path = await AndroidStorage.importDocument(source);
@@ -345,7 +435,7 @@ class _VaultBrowserState extends State<VaultBrowser> with WidgetsBindingObserver
     try {
       final restored = await widget.session.restoreSnapshot(File(path), password);
       if (!mounted) return;
-      await Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => VaultBrowser(session: restored, vaultName: widget.vaultName, externalUri: widget.externalUri, onSaved: widget.onSaved)));
+      await Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => VaultBrowser(session: restored, vaultName: widget.vaultName, externalUri: widget.externalUri, settings: widget.settings, onSaved: widget.onSaved)));
     } catch (_) {
       if (mounted) _message('Unable to restore snapshot. It may be damaged or use a different password.');
     } finally {
@@ -375,7 +465,7 @@ class _VaultBrowserState extends State<VaultBrowser> with WidgetsBindingObserver
         if (folderId != null) ListTile(leading: const Icon(Icons.arrow_back), title: const Text('Back'), onTap: () => setState(() => folderId = widget.session.items[folderId]?.parentId)),
         Expanded(child: currentItems.isEmpty ? const Center(child: Text('This folder is empty. Import a file or create a folder.')) : ListView.builder(itemCount: currentItems.length, itemBuilder: (context, index) {
           final item = currentItems[index];
-          return ListTile(leading: Icon(item.isDirectory ? Icons.folder_outlined : Icons.insert_drive_file_outlined, color: item.isDirectory ? theme.colorScheme.primary : null), title: Text(item.name), subtitle: item.isDirectory ? const Text('Folder') : Text('${item.logicalSize} bytes'), onTap: item.isDirectory ? () => setState(() => folderId = item.id) : () => _preview(item), onLongPress: () => _rename(item), trailing: PopupMenuButton<String>(onSelected: (action) { if (action == 'rename') _rename(item); if (action == 'delete') _delete(item); if (action == 'export') _export(item); if (action == 'share') _share(item); if (action == 'preview') _preview(item); }, itemBuilder: (_) => const [PopupMenuItem(value: 'rename', child: Text('Rename')), PopupMenuItem(value: 'preview', child: Text('Preview')), PopupMenuItem(value: 'export', child: Text('Export')), PopupMenuItem(value: 'share', child: Text('Share')), PopupMenuItem(value: 'delete', child: Text('Delete'))]));
+          return ListTile(contentPadding: EdgeInsets.symmetric(horizontal: 24, vertical: widget.settings.compactView ? 0 : 6), leading: Icon(item.isDirectory ? Icons.folder_outlined : Icons.insert_drive_file_outlined, color: item.isDirectory ? theme.colorScheme.primary : null), title: Text(item.name), subtitle: item.isDirectory ? const Text('Folder') : (widget.settings.showSizes ? Text('${item.logicalSize} bytes') : null), onTap: item.isDirectory ? () => setState(() => folderId = item.id) : () => _preview(item), onLongPress: () => _rename(item), trailing: PopupMenuButton<String>(onSelected: (action) { if (action == 'rename') _rename(item); if (action == 'delete') _delete(item); if (action == 'export') _export(item); if (action == 'share') _share(item); if (action == 'preview') _preview(item); }, itemBuilder: (_) => const [PopupMenuItem(value: 'rename', child: Text('Rename')), PopupMenuItem(value: 'preview', child: Text('Preview')), PopupMenuItem(value: 'export', child: Text('Export')), PopupMenuItem(value: 'share', child: Text('Share')), PopupMenuItem(value: 'delete', child: Text('Delete'))]));
         }))]),
       bottomNavigationBar: busy ? const LinearProgressIndicator() : null,
       ),
