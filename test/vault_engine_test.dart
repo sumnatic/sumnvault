@@ -28,7 +28,7 @@ void main() {
     await reopened.save();
     final savedAgain = await engine.open(file, 'vault password');
     expect(await savedAgain.readFile(savedAgain.entries.singleWhere((item) => item.name == 'saved-again.txt').id), [1, 2, 3]);
-    reopened.delete(folderId);
+    await reopened.delete(folderId);
     expect(reopened.entries, isEmpty);
     reopened.addFile('temporary.txt', [4, 5]);
     reopened.lock();
@@ -58,5 +58,16 @@ void main() {
     await file.writeAsBytes(bytes);
     final corrupted = await engine.open(file, 'chunk password');
     expect(corrupted.verify(), throwsA(anything));
+  });
+
+  test('imports a stream through staging without a readAsBytes path', () async {
+    final file = File('${Directory.systemTemp.path}/sumnvault-stream-${DateTime.now().microsecondsSinceEpoch}.svault');
+    addTearDown(() async { if (await file.exists()) await file.delete(); });
+    final engine = VaultEngine(crypto: VaultCrypto(kdf: const KdfParameters(memory: 1024, iterations: 1)));
+    final session = await engine.create(file, 'stream password');
+    await session.addFileStream('stream.bin', Stream<List<int>>.fromIterable([List<int>.filled(32, 1), List<int>.filled(32, 2)]));
+    await session.save();
+    final reopened = await engine.open(file, 'stream password');
+    expect((await reopened.readFile(reopened.entries.single.id)).length, 64);
   });
 }

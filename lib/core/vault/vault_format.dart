@@ -8,6 +8,12 @@ abstract final class VaultFormat {
   static const saltLength = 16;
   static const nonceLength = 12;
   static const keyLength = 32;
+  static const maxHeaderLength = 64 * 1024;
+  static const maxManifestLength = 64 * 1024 * 1024;
+  static const maxChunkRecordLength = defaultChunkSize + 64 * 1024;
+  static const maxKdfMemory = 1024 * 1024;
+  static const maxKdfIterations = 12;
+  static const maxKdfParallelism = 8;
 }
 
 class VaultHeader {
