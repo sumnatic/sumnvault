@@ -1,339 +1,504 @@
-# SumnVault
+# SumnVault 🔐
 
-**SumnVault** is a secure, portable, encrypted file vault written in Python.
+**Your files. One vault. Fully private.**
 
-It allows you to store documents, certificates, credentials, recovery codes, source code, backups, and virtually any type of file inside a single `.sumn` file.
+SumnVault is a modern, cross-platform application for storing sensitive files inside secure, portable and encrypted digital vaults.
 
-Your vault can be copied to a USB drive, external disk, cloud storage, or another computer while remaining protected by your password.
+Built by **Sumnatic**, SumnVault is designed around a simple idea:
 
-> **One file. One password. Your data.**
+> Your sensitive files should belong to you — not to a cloud service.
 
----
-
-## Features
-
-* 🔐 Strong password-based encryption
-* 🧂 Unique cryptographic salt per vault
-* 🛡️ Authenticated encryption and integrity verification
-* 📦 Compression before encryption
-* 📁 Support for directories and nested files
-* ➕ Add files and directories
-* 🗑️ Remove files
-* ✏️ Rename and move files
-* 📤 Export individual files or the entire vault
-* 🔎 Search files inside the vault
-* 🔑 Change the vault password
-* 💾 Portable `.sumn` vault format
-* ⚡ Designed to avoid loading entire vaults into memory
-* 💥 Protection against corrupted or tampered vaults
-* 🧩 Versioned file format for future compatibility
-* 🖥️ CLI-first architecture with GUI support planned
+A `.svault` file can contain documents, certificates, images, backups and other files inside a virtual filesystem protected by a password.
 
 ---
 
-## Why SumnVault?
+## ✨ Features
 
-Modern computers accumulate a huge amount of sensitive data:
+### 🔐 Secure Vaults
 
-* Personal documents
-* Certificates
-* Backup codes
-* Recovery keys
-* Credentials
-* Private source code
-* Financial documents
-* Scanned documents
-* Personal archives
-* Configuration files
+Create a `.svault` file protected by a user-defined password.
 
-Keeping these files scattered across folders, drives, and cloud services makes organization and protection difficult.
+Each vault is designed to provide:
 
-SumnVault provides a simple alternative:
+* Strong password-based key derivation
+* Authenticated encryption
+* Encrypted filesystem metadata
+* Protection against unauthorized modifications
+* Portable, self-contained storage
+* Offline-first operation
+
+SumnVault does **not** require an online account to create or use a vault.
+
+---
+
+### 📁 Virtual Filesystem
+
+A vault behaves like its own filesystem.
 
 ```text
-Documents
-Certificates
-Recovery Codes
-Backups
-Private Files
-       │
-       ▼
-┌─────────────────┐
-│  SumnVault      │
-│  myvault.sumn   │
-└─────────────────┘
+Personal.svault
+│
+├── Documents/
+│   ├── Identity/
+│   │   ├── RG.pdf
+│   │   └── CPF.pdf
+│   │
+│   └── Certificates/
+│       ├── Certificate-01.pdf
+│       └── Certificate-02.pdf
+│
+├── Photos/
+│   ├── Photo-01.jpg
+│   └── Photo-02.png
+│
+└── Important/
+    └── Backup.txt
 ```
 
-Everything is stored inside one encrypted container.
+Inside SumnVault, users can:
+
+* Create folders
+* Add files
+* Rename files
+* Move files
+* Replace files
+* Delete files
+* Rename folders
+* Move folders
+* Search files
+* Export files
+
+All of this happens without exposing the vault's internal contents as ordinary plaintext files.
 
 ---
 
-## Security
+### 📦 Portable `.svault` Format
 
-Security is the primary design goal of SumnVault.
-
-The project is designed around established cryptographic primitives rather than custom cryptography.
-
-A simplified representation of the key derivation process is:
+A SumnVault is represented by a single:
 
 ```text
-                 User Password
-                       │
-                       ▼
-                    Argon2id
-                       │
-                Derived Key
-                       │
-                       ▼
-             Authenticated Encryption
-                       │
-                       ▼
-                  .sumn Vault
+.svault
 ```
 
-The vault is designed to provide:
+file.
 
-* Password-based key derivation
-* Protection against offline password guessing
-* Confidentiality of stored files
-* Integrity verification
-* Tamper detection
-* Encrypted vault metadata
-* Secure random salts and nonces
-* Safe vault updates
-* Atomic writes where possible
+This makes vaults easy to:
+
+* Back up
+* Copy between computers
+* Store on external drives
+* Transfer between supported devices
+* Keep alongside other backups
+* Store using third-party cloud storage
+
+The vault format is designed to be independent of the user interface and operating system.
+
+---
+
+### 🗜️ Compression
+
+SumnVault can compress data before encryption when doing so provides a meaningful size reduction.
+
+The general pipeline is:
+
+```text
+File
+  ↓
+Compression
+  ↓
+Encryption
+  ↓
+.svault
+```
+
+Already-compressed formats can be stored without unnecessary compression.
+
+---
+
+### 🧩 Chunk-Based Storage
+
+Vault data is designed around encrypted chunks rather than requiring entire files or entire vaults to be loaded into memory.
+
+This allows SumnVault to scale toward:
+
+* Large files
+* Large vaults
+* Partial reads
+* Streaming operations
+* Incremental modifications
+
+The goal is to make a vault containing hundreds of gigabytes fundamentally different from simply loading hundreds of gigabytes into RAM.
+
+---
+
+### 🔒 Vault Lock
+
+Vaults can be manually or automatically locked.
+
+When locked, the application stops exposing the vault's contents and requires authentication to access it again.
+
+Planned lock triggers include:
+
+* Manual lock
+* Inactivity timeout
+* Application exit
+* System lock/suspend where supported
+* Mobile application lifecycle events
+
+---
+
+### 🔍 Search
+
+Search files and folders directly inside the vault.
+
+Initial search focuses on:
+
+* File names
+* Folder names
+* Paths
+
+SumnVault is designed to avoid creating unnecessary plaintext indexes outside the encrypted vault.
+
+---
+
+### 👁️ Secure Preview
+
+SumnVault can preview supported file types without requiring the user to permanently extract them to the operating system filesystem.
+
+Planned/common preview formats include:
+
+* PDF
+* JPEG
+* PNG
+* WebP
+* TXT
+* JSON
+
+Preview architecture is designed to minimize unnecessary plaintext temporary files.
+
+---
+
+### 💻 Cross-Platform
+
+SumnVault is built with **Flutter and Dart** and targets:
+
+* 🪟 Windows
+* 🐧 Linux
+* 🍎 macOS
+* 📱 Android
+
+The same `.svault` should be usable across supported platforms.
+
+For example:
+
+```text
+Windows
+   │
+   ▼
+Personal.svault
+   │
+   ▼
+Android
+   │
+   ▼
+macOS
+   │
+   ▼
+Linux
+```
+
+---
+
+## 🛡️ Security
+
+Security is the highest priority of SumnVault.
+
+SumnVault does **not** implement custom cryptographic algorithms.
+
+Instead, it is designed to use established cryptographic primitives and mature implementations.
+
+The conceptual encryption flow is:
+
+```text
+User Password
+      │
+      ▼
+Password KDF
+      │
+      ▼
+Encryption Key
+      │
+      ▼
+Authenticated Encryption
+      │
+      ▼
+Encrypted Vault
+```
+
+The architecture is designed around technologies such as:
+
+* Argon2id for password-based key derivation
+* AES-256-GCM and/or ChaCha20-Poly1305 for authenticated encryption
+* Cryptographically secure random salts and nonces
+
+The final algorithms and parameters should be selected and documented based on the specific implementation and security review.
 
 ### Important
 
-SumnVault does **not** store your password.
+SumnVault cannot protect data from a fully compromised device while a vault is unlocked.
 
-If you lose your password, there is intentionally no hidden master password or backdoor that can recover the vault.
+If malware has control over a computer or phone, it may potentially access information that the user is actively viewing or editing.
 
-**Your password is your key.**
-
-Always keep secure backups of your `.sumn` files.
+SumnVault aims to protect the vault itself against unauthorized access, theft of the `.svault` file, and unauthorized modification.
 
 ---
 
-## Example
+## 🧱 Architecture
 
-Create a vault:
-
-```bash
-sumnvault create personal.sumn
-```
-
-Add a file:
-
-```bash
-sumnvault add personal.sumn certificate.pdf
-```
-
-Add an entire directory:
-
-```bash
-sumnvault add personal.sumn ./documents/
-```
-
-List its contents:
-
-```bash
-sumnvault list personal.sumn
-```
-
-Extract a file:
-
-```bash
-sumnvault extract personal.sumn certificate.pdf
-```
-
-Export the entire vault:
-
-```bash
-sumnvault export personal.sumn ./backup/
-```
-
-Change the password:
-
-```bash
-sumnvault passwd personal.sumn
-```
-
----
-
-## Interactive Mode
-
-SumnVault can also provide an interactive shell for working with an unlocked vault:
-
-```text
-SumnVault
-Version 1
-
-Password: ********
-
-Vault unlocked.
-
-12 files
-4 directories
-Size: 184 MB
-
-sumnvault>
-```
-
-Available commands may include:
-
-```text
-ls
-cd
-pwd
-add
-mkdir
-rm
-mv
-rename
-extract
-cat
-info
-search
-export
-passwd
-lock
-exit
-```
-
----
-
-## `.sumn` Format
-
-SumnVault uses its own versioned container format.
+SumnVault is designed with a strong separation between the application interface and the vault engine.
 
 Conceptually:
 
 ```text
-┌──────────────────────────────┐
-│          SUMN HEADER         │
-├──────────────────────────────┤
-│     Encrypted Metadata       │
-├──────────────────────────────┤
-│                              │
-│     Compressed File Data     │
-│                              │
-├──────────────────────────────┤
-│ Integrity / Authentication   │
-└──────────────────────────────┘
+                 SumnVault
+                     │
+        ┌────────────┴────────────┐
+        │                         │
+    Flutter UI                Core Engine
+        │                         │
+        │          ┌──────────────┼──────────────┐
+        │          │              │              │
+        │        Vault          Crypto        Storage
+        │          │              │              │
+        │       Metadata       KDF/AEAD       Chunks
+        │          │              │              │
+        │       Filesystem     Security      Compression
+        │
+        └──── Platform Integration
+                 │
+       ┌─────────┼─────────┐
+       │         │         │
+    Windows    Linux     macOS
+                          │
+                        Android
 ```
 
-Sensitive metadata should remain encrypted so that inspecting a `.sumn` file does not unnecessarily reveal its contents.
+The core should remain independent from Flutter's presentation layer wherever practical.
 
-The format is versioned to allow future versions of SumnVault to evolve without immediately breaking existing vaults.
+This allows the vault engine to potentially be reused in the future by:
+
+* CLI tools
+* Other interfaces
+* Libraries
+* Automation
+* Additional platforms
 
 ---
 
-## Architecture
+## 📱 Android
 
-SumnVault is designed with separation between the user interface and the vault engine:
+Android is treated as a first-class platform.
+
+SumnVault should integrate with modern Android storage APIs rather than assuming unrestricted filesystem access.
+
+This includes support for workflows such as:
+
+* Opening existing `.svault` files
+* Creating vaults
+* Importing files
+* Exporting files
+* Choosing storage locations
+* Working with external storage when permitted
+* Handling application backgrounding and lifecycle events
+
+Large file operations should use streaming rather than loading entire files into memory.
+
+---
+
+## 🖥️ Desktop
+
+On Windows, Linux and macOS, SumnVault provides a desktop-oriented experience with:
+
+* Resizable windows
+* Keyboard shortcuts
+* Drag-and-drop
+* Context menus
+* Multi-selection
+* File pickers
+* Keyboard navigation
+* Native filesystem integration
+
+---
+
+## 💾 Data Integrity
+
+A corrupted or interrupted save operation should not silently destroy the user's vault.
+
+SumnVault is designed around safe-write principles such as:
 
 ```text
-CLI / GUI
-    │
-    ▼
-Vault API
-    │
-    ▼
-Vault Engine
-    │
-    ├── Storage
-    ├── Metadata
-    ├── Compression
-    └── Cryptography
+Original.svault
+      │
+      ▼
+Temporary.svault
+      │
+      ▼
+Write + Verify
+      │
+      ▼
+Atomic Commit
+      │
+      ▼
+Original.svault
 ```
 
-This allows future interfaces and features to be added without rewriting the underlying vault engine.
+The goal is to ensure that an interrupted operation leaves the previous valid vault intact whenever technically possible.
+
+A future **Verify Vault** feature will allow users to check:
+
+* Metadata integrity
+* Chunk integrity
+* Authentication
+* Filesystem consistency
+* Corrupted blocks
 
 ---
 
-## Installation
+## 🔑 Password Recovery
+
+SumnVault does not contain a secret master password or universal backdoor.
+
+If a user loses the password to a vault, SumnVault should not be able to simply bypass its encryption.
+
+Optional recovery mechanisms may be introduced in the future, but they must be explicitly configured by the user and designed as cryptographic recovery mechanisms rather than hidden backdoors.
+
+---
+
+## ☁️ Cloud Philosophy
+
+Cloud synchronization is **not required** to use SumnVault.
+
+The fundamental product is local and offline.
+
+---
+
+## 🎨 Design Philosophy
+
+SumnVault should feel like **premium privacy software**.
+
+The design should be:
+
+* Minimal
+* Modern
+* Professional
+* Calm
+* Secure
+* Intuitive
+
+Avoid unnecessary "hacker" aesthetics.
+
+The visual identity should be consistent with **Sumnatic** while maintaining its own product identity.
+
+### Brand
+
+**SumnVault**
+
+### Company
+
+**Sumnatic**
+
+### Tagline
+
+> **Your files. One vault. Fully private.**
+
+---
+
+## 🚀 Getting Started
+
+### Requirements
+
+* Flutter SDK
+* Dart SDK
+* Platform-specific build dependencies
+* Android SDK for Android development
+
+Verify the Flutter environment:
+
+```bash
+flutter doctor
+```
 
 Clone the repository:
 
 ```bash
-git clone https://github.com/sumnatic/sumnvault.git
+git clone <repository-url>
 cd sumnvault
 ```
 
-Install the project:
+Install dependencies:
 
 ```bash
-pip install .
+flutter pub get
 ```
 
-For development:
+Run the application:
 
 ```bash
-pip install -e ".[dev]"
+flutter run
 ```
 
----
+For a specific platform:
 
-## Design Goals
+```bash
+flutter run -d windows
+flutter run -d linux
+flutter run -d macos
+flutter run -d <android-device>
+```
 
-SumnVault prioritizes:
+Build examples:
 
-1. **Security**
-2. **Integrity**
-3. **Reliability**
-4. **Privacy**
-5. **Efficiency**
-6. **Usability**
+```bash
+flutter build windows
+flutter build linux
+flutter build macos
+flutter build apk
+```
 
-The project is intended to remain simple enough for individuals to use while maintaining a security-oriented architecture.
-
----
-
-## Threat Model
-
-SumnVault is designed primarily to protect data stored at rest.
-
-For example, it should help protect a `.sumn` file if someone obtains a copy of it without knowing the password.
-
-However, it cannot protect against every possible threat.
-
-SumnVault cannot reliably protect your data if:
-
-* Your password is compromised
-* Your computer is already compromised
-* Malware can access your unlocked vault
-* Your operating system is compromised
-* You voluntarily export decrypted files to an insecure location
-* Your password is weak enough to be practically guessed
-
-Security is not just about encryption. Use a strong, unique password and keep backups of your vault.
+Platform-specific requirements may vary.
 
 ---
 
-## Philosophy
+## ⚠️ Security Status
 
-SumnVault follows a simple principle:
+SumnVault should **not be considered independently security-audited** until a qualified security review has been performed.
 
-> **Your files should belong to you, not to the application that stores them.**
+Cryptographic software must be reviewed carefully before being trusted with highly sensitive information.
 
-The `.sumn` format is designed to make an encrypted vault portable, self-contained, and independent of a particular folder structure or cloud provider.
+The project prioritizes:
 
-Copy the vault.
-
-Move the vault.
-
-Back up the vault.
-
-Keep control of the vault.
-
----
-
-## License
-
-SumnVault is released under the **MIT License**.
-
-See [`LICENSE`](LICENSE) for details.
+1. Security
+2. Data integrity
+3. Reliability
+4. Cross-platform compatibility
+5. Performance
+6. User experience
+7. Visual design
 
 ---
 
+## 📄 License
+
+[CC0-1.0 license](https://github.com/sumnatic/sumnvault/blob/main/LICENSE)
+
+---
+
+<div align="center">
+
+### SumnVault
+
+**Your files. One vault. Fully private.**
+
+Made by **Sumnatic** 🇧🇷
+
+</div>
